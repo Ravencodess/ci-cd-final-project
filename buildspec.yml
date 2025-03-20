@@ -14,17 +14,21 @@ phases:
       - BASE_AMI=$(aws ssm get-parameter --name "/RIDA/BaseAMI" --query "Parameter.Value" --output text)
       - echo "Base AMI: $BASE_AMI"
       - echo "Updating packer template with base AMI..."
-      - sed -i "s/REPLACE_BASE_AMI_ID/$BASE_AMI/" packer-template.json
+      - |
+        # Replace the placeholder in your packer-template.json file with the BASE_AMI value
+        sed -i "s/REPLACE_BASE_AMI_ID/$BASE_AMI/" packer-template.json
   build:
     commands:
       - echo "Building the new application AMI..."
       - packer build packer-template.json | tee packer_output.log
-      - NEW_AMI=$(grep 'AMI: ' packer_output.log | awk '{print $NF}' | tail -n1)
+      - |
+        # Extract the new AMI ID from the packer output (assumes it is printed in the logs)
+        NEW_AMI=$(grep 'AMI: ' packer_output.log | awk '{print $NF}' | tail -n1)
       - echo "New AMI created: $NEW_AMI"
   post_build:
     commands:
       - echo "Storing new AMI ID in Parameter Store..."
       - aws ssm put-parameter --name "/RIDA/AppAMI" --value "$NEW_AMI" --type String --overwrite --region us-east-1
-artifacts: 
+artifacts:
   files:
     - packer_output.log
