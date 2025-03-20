@@ -10,8 +10,8 @@ phases:
       - mv packer /usr/local/bin/
   pre_build:
     commands:
-      - "echo 'Fetching the latest base AMI from Parameter Store...'"
-      - "BASE_AMI=$(aws ssm get-parameter --name '/RIDA/BaseAMI' --query 'Parameter.Value' --output text)"
+      - echo "Fetching the latest base AMI from Parameter Store..."
+      - BASE_AMI=$(aws ssm get-parameter --name '/RIDA/BaseAMI' --query 'Parameter.Value' --output text)
       - echo "Base AMI: $BASE_AMI"
       - echo "Updating packer template with base AMI..."
       - sed -i "s/REPLACE_BASE_AMI_ID/$BASE_AMI/" packer-template.json
