@@ -18,8 +18,8 @@ phases:
   build:
     commands:
       - echo "Building the new application AMI..."
-      - packer build packer-template.json | tee packer_output.log
-      - NEW_AMI=$(grep 'AMI: ' packer_output.log | awk '{print $NF}' | tail -n1)
+      - "packer build packer-template.json | tee packer_output.log"
+      - "NEW_AMI=$(grep 'AMI: ' packer_output.log | awk '{print $NF}' | tail -n1)"
       - echo "New AMI created: $NEW_AMI"
   post_build:
     commands:
