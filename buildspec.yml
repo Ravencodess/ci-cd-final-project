@@ -32,8 +32,10 @@ phases:
     commands:
       - echo "Building the application"
       - yarn build
+      - echo "Creating Packer template"
+      - echo '{"variables":{"base_ami":"{{env `BASE_AMI`}}","region":"{{env `REGION`}}","app_version":"{{env `CODEBUILD_RESOLVED_SOURCE_VERSION`}}"},"builders":[{"type":"amazon-ebs","region":"{{user `region`}}","source_ami":"{{user `base_ami`}}","instance_type":"t3.medium","ssh_username":"ec2-user","ami_name":"app-ami-{{user `app_version`}}-{{timestamp}}","tags":{"Name":"AppAMI","Version":"{{user `app_version`}}","BuildId":"{{env `CODEBUILD_BUILD_ID`}}"}}],"provisioners":[{"type":"file","source":"./dist","destination":"/tmp/app"},{"type":"shell","inline":["sudo mkdir -p /var/www/app","sudo cp -R /tmp/app/* /var/www/app/","sudo chown -R ec2-user:ec2-user /var/www/app"]}]}' > packer-template.json
       - echo "Building AMI with Packer"
-      - packer build -machine-readable packer/packer-template.json > packer_output.txt || { cat packer_output.txt; exit 1; }
+      - packer build -machine-readable packer-template.json > packer_output.txt || { cat packer_output.txt; exit 1; }
       - AMI_ID=$(grep 'artifact,0,id' packer_output.txt | cut -d, -f6 | cut -d: -f2)
       - echo "Created AMI: ${AMI_ID}"
 
