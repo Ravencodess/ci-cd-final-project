@@ -39,8 +39,7 @@ phases:
       - yarn build
       # Create Packer template
       - echo "Creating Packer template"
-      - |
-        cat > packer-template.json << 'EOF'
+      - cat > packer-template.json << 'EOF'
         {
           "variables": {
             "base_ami": "{{env `BASE_AMI`}}",
@@ -79,9 +78,9 @@ phases:
         EOF
       # Build AMI with Packer
       - echo "Building AMI with Packer"
-      - packer build packer-template.json
+      - packer build -machine-readable packer-template.json > packer_output.txt
       # Extract AMI ID from Packer output
-      - AMI_ID=$(packer build -machine-readable packer-template.json | grep 'artifact,0,id' | cut -d, -f6 | cut -d: -f2)
+      - AMI_ID=$(cat packer_output.txt | grep 'artifact,0,id' | cut -d, -f6 | cut -d: -f2)
       - echo "Created AMI: ${AMI_ID}"
       
   post_build:
