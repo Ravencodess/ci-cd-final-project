@@ -14,79 +14,67 @@ phases:
     runtime-versions:
       nodejs: 18
     commands:
-      # Install Packer
       - echo "Installing Packer version ${PACKER_VERSION}"
       - curl -o packer.zip "https://releases.hashicorp.com/packer/${PACKER_VERSION}/packer_${PACKER_VERSION}_linux_amd64.zip"
       - unzip packer.zip -d /usr/local/bin/
       - chmod +x /usr/local/bin/packer
       - packer --version
-      # Install other dependencies
       - npm install -g yarn
       
   pre_build:
     commands:
-      # Get the base AMI from Parameter Store
       - echo "Retrieving base AMI from Parameter Store"
       - echo "Base AMI ID: ${BASE_AMI}"
-      # Install application dependencies
       - echo "Installing application dependencies"
       - yarn install
       
   build:
     commands:
-      # Build the application
       - echo "Building the application"
       - yarn build
-      # Create Packer template
       - echo "Creating Packer template"
-      - |
-        cat > packer-template.json << EOF
-        {
-          "variables": {
-            "base_ami": "{{env \`BASE_AMI\`}}",
-            "region": "{{env \`REGION\`}}",
-            "app_version": "{{env \`CODEBUILD_RESOLVED_SOURCE_VERSION\`}}"
-          },
-          "builders": [{
-            "type": "amazon-ebs",
-            "region": "{{user \`region\`}}",
-            "source_ami": "{{user \`base_ami\`}}",
-            "instance_type": "t3.medium",
-            "ssh_username": "ec2-user",
-            "ami_name": "app-ami-{{user \`app_version\`}}-{{timestamp}}",
-            "tags": {
-              "Name": "AppAMI",
-              "Version": "{{user \`app_version\`}}",
-              "BuildId": "{{env \`CODEBUILD_BUILD_ID\`}}"
-            }
-          }],
-          "provisioners": [
-            {
-              "type": "file",
-              "source": "./dist",
-              "destination": "/tmp/app"
-            },
-            {
-              "type": "shell",
-              "inline": [
-                "sudo mkdir -p /var/www/app",
-                "sudo cp -R /tmp/app/* /var/www/app/",
-                "sudo chown -R ec2-user:ec2-user /var/www/app"
-              ]
-            }
-          ]
-        }
-        EOF
-      # Build AMI with Packer
+      - echo '{' > packer-template.json
+      - echo '  "variables": {' >> packer-template.json
+      - echo '    "base_ami": "{{env `BASE_AMI`}}",
+      - echo '    "region": "{{env `REGION`}}",
+      - echo '    "app_version": "{{env `CODEBUILD_RESOLVED_SOURCE_VERSION`}}"' >> packer-template.json
+      - echo '  },' >> packer-template.json
+      - echo '  "builders": [{' >> packer-template.json
+      - echo '    "type": "amazon-ebs",' >> packer-template.json
+      - echo '    "region": "{{user `region`}}",' >> packer-template.json
+      - echo '    "source_ami": "{{user `base_ami`}}",' >> packer-template.json
+      - echo '    "instance_type": "t3.medium",' >> packer-template.json
+      - echo '    "ssh_username": "ec2-user",' >> packer-template.json
+      - echo '    "ami_name": "app-ami-{{user `app_version`}}-{{timestamp}}",' >> packer-template.json
+      - echo '    "tags": {' >> packer-template.json
+      - echo '      "Name": "AppAMI",' >> packer-template.json
+      - echo '      "Version": "{{user `app_version`}}",' >> packer-template.json
+      - echo '      "BuildId": "{{env `CODEBUILD_BUILD_ID`}}"' >> packer-template.json
+      - echo '    }' >> packer-template.json
+      - echo '  }],' >> packer-template.json
+      - echo '  "provisioners": [' >> packer-template.json
+      - echo '    {' >> packer-template.json
+      - echo '      "type": "file",' >> packer-template.json
+      - echo '      "source": "./dist",' >> packer-template.json
+      - echo '      "destination": "/tmp/app"' >> packer-template.json
+      - echo '    },' >> packer-template.json
+      - echo '    {' >> packer-template.json
+      - echo '      "type": "shell",' >> packer-template.json
+      - echo '      "inline": [' >> packer-template.json
+      - echo '        "sudo mkdir -p /var/www/app",' >> packer-template.json
+      - echo '        "sudo cp -R /tmp/app/* /var/www/app/",' >> packer-template.json
+      - echo '        "sudo chown -R ec2-user:ec2-user /var/www/app"' >> packer-template.json
+      - echo '      ]' >> packer-template.json
+      - echo '    }' >> packer-template.json
+      - echo '  ]' >> packer-template.json
+      - echo '}' >> packer-template.json
       - echo "Building AMI with Packer"
       - packer build -machine-readable packer-template.json > packer_output.txt
-      # Extract AMI ID from Packer output
       - AMI_ID=$(cat packer_output.txt | grep 'artifact,0,id' | cut -d, -f6 | cut -d: -f2)
       - echo "Created AMI: ${AMI_ID}"
       
   post_build:
     commands:
-      # Store the new AMI ID in Parameter Store
       - echo "Storing new AMI ID in Parameter Store"
       - aws ssm put-parameter --name ${NEW_AMI_PARAM_NAME} --value ${AMI_ID} --type String --overwrite --region ${REGION}
       - echo "Build completed successfully!"
