@@ -2,11 +2,11 @@ version: 0.2
 env:
   variables:
     PACKER_VERSION: "1.9.4"
-    BASE_AMI_PARAM_NAME: "/ami/base"
+    BASE_AMI_PARAM_NAME: "/RIDA/BaseAMI"
     NEW_AMI_PARAM_NAME: "/ami/application"
     REGION: "us-east-1"
   parameter-store:
-    BASE_AMI: "/ami/base"
+    BASE_AMI: "/RIDA/BaseAMI"
 phases:
   install:
     runtime-versions:
