@@ -33,25 +33,25 @@ phases:
       - echo "Building the application"
       - yarn build
       - echo "Creating Packer template"
-      - >
-        cat > packer-template.json << 'EOL'
+      - |
+        cat << 'EOF' > packer-template.json
         {
           "variables": {
-            "base_ami": "{{env `BASE_AMI`}}",
-            "region": "{{env `REGION`}}",
-            "app_version": "{{env `CODEBUILD_RESOLVED_SOURCE_VERSION`}}"
+            "base_ami": "{{env \`BASE_AMI\`}}",
+            "region": "{{env \`REGION\`}}",
+            "app_version": "{{env \`CODEBUILD_RESOLVED_SOURCE_VERSION\`}}"
           },
           "builders": [{
             "type": "amazon-ebs",
-            "region": "{{user `region`}}",
-            "source_ami": "{{user `base_ami`}}",
+            "region": "{{user \`region\`}}",
+            "source_ami": "{{user \`base_ami\`}}",
             "instance_type": "t3.medium",
             "ssh_username": "ec2-user",
-            "ami_name": "app-ami-{{user `app_version`}}-{{timestamp}}",
+            "ami_name": "app-ami-{{user \`app_version\`}}-{{timestamp}}",
             "tags": {
               "Name": "AppAMI",
-              "Version": "{{user `app_version`}}",
-              "BuildId": "{{env `CODEBUILD_BUILD_ID`}}"
+              "Version": "{{user \`app_version\`}}",
+              "BuildId": "{{env \`CODEBUILD_BUILD_ID\`}}"
             }
           }],
           "provisioners": [
@@ -70,16 +70,16 @@ phases:
             }
           ]
         }
-        EOL
+        EOF
       - echo "Building AMI with Packer"
       - packer build -machine-readable packer-template.json > packer_output.txt || { cat packer_output.txt; exit 1; }
-      - AMI_ID=$(cat packer_output.txt | grep 'artifact,0,id' | cut -d, -f6 | cut -d: -f2)
+      - AMI_ID=$(grep 'artifact,0,id' packer_output.txt | cut -d, -f6 | cut -d: -f2)
       - echo "Created AMI: ${AMI_ID}"
 
   post_build:
     commands:
       - echo "Storing new AMI ID in Parameter Store"
-      - aws ssm put-parameter --name ${NEW_AMI_PARAM_NAME} --value ${AMI_ID} --type String --overwrite --region ${REGION}
+      - aws ssm put-parameter --name "${NEW_AMI_PARAM_NAME}" --value "${AMI_ID}" --type String --overwrite --region "${REGION}"
       - echo "Build completed successfully!"
 
 artifacts:
