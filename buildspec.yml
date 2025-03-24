@@ -1,5 +1,4 @@
 version: 0.2
-
 env:
   variables:
     PACKER_VERSION: "1.9.4"
@@ -8,7 +7,6 @@ env:
     REGION: "us-east-1"
   parameter-store:
     BASE_AMI: "/ami/base"
-
 phases:
   install:
     runtime-versions:
@@ -20,14 +18,12 @@ phases:
       - chmod +x /usr/local/bin/packer
       - packer --version
       - npm install -g yarn
-
   pre_build:
     commands:
       - echo "Retrieving base AMI from Parameter Store"
       - echo "Base AMI ID: ${BASE_AMI}"
       - echo "Installing application dependencies"
       - yarn install
-
   build:
     commands:
       - echo "Building the application"
@@ -36,20 +32,17 @@ phases:
       - packer build -machine-readable packer/template.json > packer_output.txt || { cat packer_output.txt; exit 1; }
       - AMI_ID=$(grep 'artifact,0,id' packer_output.txt | cut -d, -f6 | cut -d: -f2)
       - echo "Created AMI: ${AMI_ID}"
-
   post_build:
     commands:
       - echo "Storing new AMI ID in Parameter Store"
       - aws ssm put-parameter --name "${NEW_AMI_PARAM_NAME}" --value "${AMI_ID}" --type String --overwrite --region "${REGION}"
       - echo "Build completed successfully!"
-
 artifacts:
   files:
     - appspec.yml
     - dist/**/*
     - manifest.json
   discard-paths: no
-
 cache:
   paths:
     - 'node_modules/**/*'
