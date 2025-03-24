@@ -35,8 +35,8 @@ phases:
       - echo "Creating Packer template"
       - echo '{' > packer-template.json
       - echo '  "variables": {' >> packer-template.json
-      - echo '    "base_ami": "{{env `BASE_AMI`}}",
-      - echo '    "region": "{{env `REGION`}}",
+      - echo '    "base_ami": "{{env `BASE_AMI`}}",' >> packer-template.json
+      - echo '    "region": "{{env `REGION`}}",' >> packer-template.json
       - echo '    "app_version": "{{env `CODEBUILD_RESOLVED_SOURCE_VERSION`}}"' >> packer-template.json
       - echo '  },' >> packer-template.json
       - echo '  "builders": [{' >> packer-template.json
