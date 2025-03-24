@@ -1,24 +1,48 @@
 version: 0.2
+env:
+  variables:
+    PACKER_VERSION: "1.9.4"
+    BASE_AMI_PARAM_NAME: "/ami/base"
+    NEW_AMI_PARAM_NAME: "/ami/application"
+    REGION: "us-east-1"
+  parameter-store:
+    BASE_AMI: "/ami/base"
 phases:
   install:
     runtime-versions:
       nodejs: 18
     commands:
-      - echo Installing dependencies
-      - npm install -g yarn
+      - "echo \"Installing Packer version ${PACKER_VERSION}\""
+      - "curl -o packer.zip \"https://releases.hashicorp.com/packer/${PACKER_VERSION}/packer_${PACKER_VERSION}_linux_amd64.zip\""
+      - "unzip packer.zip -d /usr/local/bin/"
+      - "chmod +x /usr/local/bin/packer"
+      - "packer --version"
+      - "npm install -g yarn"
   pre_build:
     commands:
-      - echo Pre-build phase
-      - yarn install
+      - "echo \"Retrieving base AMI from Parameter Store\""
+      - "echo \"Base AMI ID: ${BASE_AMI}\""
+      - "echo \"Installing application dependencies\""
+      - "yarn install"
   build:
     commands:
-      - echo Build phase
-      - yarn build
+      - "echo \"Building the application\""
+      - "yarn build"
+      - "echo \"Building AMI with Packer\""
+      - "packer build -machine-readable packer/template.json > packer_output.txt || { cat packer_output.txt; exit 1; }"
+      - "AMI_ID=$(grep 'artifact,0,id' packer_output.txt | cut -d, -f6 | cut -d: -f2)"
+      - "echo \"Created AMI: ${AMI_ID}\""
   post_build:
     commands:
-      - echo Build completed
+      - "echo \"Storing new AMI ID in Parameter Store\""
+      - "aws ssm put-parameter --name \"${NEW_AMI_PARAM_NAME}\" --value \"${AMI_ID}\" --type String --overwrite --region \"${REGION}\""
+      - "echo \"Build completed successfully!\""
 artifacts:
   files:
     - appspec.yml
     - dist/**/*
     - manifest.json
+  discard-paths: no
+cache:
+  paths:
+    - node_modules/**/*
