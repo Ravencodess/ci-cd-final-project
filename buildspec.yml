@@ -1,30 +1,103 @@
 version: 0.2
 
+env:
+  variables:
+    PACKER_VERSION: "1.9.4"
+    BASE_AMI_PARAM_NAME: "/ami/base"
+    NEW_AMI_PARAM_NAME: "/ami/application"
+    REGION: "us-east-1"
+  parameter-store:
+    BASE_AMI: "/ami/base"
+
 phases:
   install:
+    runtime-versions:
+      nodejs: 18
     commands:
-      - echo "Installing Packer..."
-      - curl -L -o packer.zip https://releases.hashicorp.com/packer/1.7.8/packer_1.7.8_linux_amd64.zip
-      - unzip packer.zip
-      - chmod +x packer
-      - mv packer /usr/local/bin/
+      # Install Packer
+      - echo "Installing Packer version ${PACKER_VERSION}"
+      - curl -o packer.zip "https://releases.hashicorp.com/packer/${PACKER_VERSION}/packer_${PACKER_VERSION}_linux_amd64.zip"
+      - unzip packer.zip -d /usr/local/bin/
+      - chmod +x /usr/local/bin/packer
+      - packer --version
+      # Install other dependencies
+      - npm install -g yarn
+      
   pre_build:
     commands:
-      - echo "Fetching the latest base AMI from Parameter Store..."
-      - BASE_AMI=$(aws ssm get-parameter --name '/RIDA/BaseAMI' --query 'Parameter.Value' --output text)
-      - echo "Base AMI: $BASE_AMI"
-      - echo "Updating packer template with base AMI..."
-      - sed -i "s/REPLACE_BASE_AMI_ID/$BASE_AMI/" packer-template.json
+      # Get the base AMI from Parameter Store
+      - echo "Retrieving base AMI from Parameter Store"
+      - echo "Base AMI ID: ${BASE_AMI}"
+      # Install application dependencies
+      - echo "Installing application dependencies"
+      - yarn install
+      
   build:
     commands:
-      - echo "Building the new application AMI..."
-      - "packer build packer-template.json | tee packer_output.log"
-      - NEW_AMI=$(grep 'AMI: ' packer_output.log | awk '{print $NF}' | tail -n1)
-      - echo "New AMI created: $NEW_AMI"
+      # Build the application
+      - echo "Building the application"
+      - yarn build
+      # Create Packer template
+      - echo "Creating Packer template"
+      - |
+        cat > packer-template.json << 'EOF'
+        {
+          "variables": {
+            "base_ami": "{{env `BASE_AMI`}}",
+            "region": "{{env `REGION`}}",
+            "app_version": "{{env `CODEBUILD_RESOLVED_SOURCE_VERSION`}}"
+          },
+          "builders": [{
+            "type": "amazon-ebs",
+            "region": "{{user `region`}}",
+            "source_ami": "{{user `base_ami`}}",
+            "instance_type": "t3.medium",
+            "ssh_username": "ec2-user",
+            "ami_name": "app-ami-{{user `app_version`}}-{{timestamp}}",
+            "tags": {
+              "Name": "AppAMI",
+              "Version": "{{user `app_version`}}",
+              "BuildId": "{{env `CODEBUILD_BUILD_ID`}}"
+            }
+          }],
+          "provisioners": [
+            {
+              "type": "file",
+              "source": "./dist",
+              "destination": "/tmp/app"
+            },
+            {
+              "type": "shell",
+              "inline": [
+                "sudo mkdir -p /var/www/app",
+                "sudo cp -R /tmp/app/* /var/www/app/",
+                "sudo chown -R ec2-user:ec2-user /var/www/app"
+              ]
+            }
+          ]
+        }
+        EOF
+      # Build AMI with Packer
+      - echo "Building AMI with Packer"
+      - packer build packer-template.json
+      # Extract AMI ID from Packer output
+      - AMI_ID=$(jq -r '.builds[-1].artifact_id' manifest.json | cut -d ":" -f2)
+      - echo "Created AMI: ${AMI_ID}"
+      
   post_build:
     commands:
-      - echo "Storing new AMI ID in Parameter Store..."
-      - aws ssm put-parameter --name "/RIDA/AppAMI" --value "$NEW_AMI" --type String --overwrite --region us-east-1
+      # Store the new AMI ID in Parameter Store
+      - echo "Storing new AMI ID in Parameter Store"
+      - aws ssm put-parameter --name ${NEW_AMI_PARAM_NAME} --value ${AMI_ID} --type String --overwrite --region ${REGION}
+      - echo "Build completed successfully!"
+
 artifacts:
   files:
-    - packer_output.log
+    - appspec.yml
+    - dist/**/*
+    - manifest.json
+  discard-paths: no
+
+cache:
+  paths:
+    - 'node_modules/**/*'
