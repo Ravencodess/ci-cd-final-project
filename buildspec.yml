@@ -81,7 +81,7 @@ phases:
       - echo "Building AMI with Packer"
       - packer build packer-template.json
       # Extract AMI ID from Packer output
-      - AMI_ID=$(jq -r '.builds[-1].artifact_id' manifest.json | cut -d ":" -f2)
+      - AMI_ID=$(packer build -machine-readable packer-template.json | grep 'artifact,0,id' | cut -d, -f6 | cut -d: -f2)
       - echo "Created AMI: ${AMI_ID}"
       
   post_build:
